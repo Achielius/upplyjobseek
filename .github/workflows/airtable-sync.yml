@@ -25,12 +25,66 @@ jobs:
           CLEAN_BASE_ID=$(echo -n "$BASE_ID" | tr -d '[:space:]')
           ENCODED_TABLE=$(echo "$TABLE" | sed 's/ /%20/g')
 
+          RUN_START=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          DAY_OF_WEEK=$(date -u +%u)   # 1=Mon ... 7=Sun
+          STATE_FILE="data/sync-state.json"
+
+          if [ "$DAY_OF_WEEK" = "7" ] || [ ! -f "$STATE_FILE" ]; then
+            MODE="full"
+          else
+            MODE="incremental"
+            LAST_SYNC=$(jq -r '.last_sync // empty' "$STATE_FILE")
+            if [ -z "$LAST_SYNC" ]; then
+              MODE="full"
+            fi
+          fi
+
+          echo "Running in $MODE mode (day $DAY_OF_WEEK)"
+
           fetch_view() {
             VIEW="$1"
             OUTPUT="$2"
             ENCODED_VIEW=$(echo "$VIEW" | sed 's/ /%20/g')
-            curl -g -f -X GET "https://api.airtable.com/v0/${CLEAN_BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}" \
-              -H "Authorization: Bearer ${AIRTABLE_TOKEN}" > "data/${OUTPUT}"
+            OFFSET=""
+            ALL_RECORDS="[]"
+
+            FORMULA_PARAM=""
+            if [ "$MODE" = "incremental" ]; then
+              FORMULA="IS_AFTER(CREATED_TIME(), '${LAST_SYNC}')"
+              ENCODED_FORMULA=$(jq -rn --arg f "$FORMULA" '$f|@uri')
+              FORMULA_PARAM="&filterByFormula=${ENCODED_FORMULA}"
+            fi
+
+            while true; do
+              URL="https://api.airtable.com/v0/${CLEAN_BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}&pageSize=100${FORMULA_PARAM}"
+              if [ -n "$OFFSET" ]; then
+                URL="${URL}&offset=${OFFSET}"
+              fi
+
+              RESPONSE=$(curl -g -s -f -X GET "$URL" -H "Authorization: Bearer ${AIRTABLE_TOKEN}")
+              if [ $? -ne 0 ]; then
+                echo "Failed fetching $VIEW at offset $OFFSET"
+                exit 1
+              fi
+
+              PAGE_RECORDS=$(echo "$RESPONSE" | jq '.records')
+              ALL_RECORDS=$(jq -c -n --argjson a "$ALL_RECORDS" --argjson b "$PAGE_RECORDS" '$a + $b')
+              OFFSET=$(echo "$RESPONSE" | jq -r '.offset // empty')
+
+              if [ -z "$OFFSET" ]; then
+                break
+              fi
+              sleep 0.25
+            done
+
+            if [ "$MODE" = "incremental" ] && [ -f "data/${OUTPUT}" ]; then
+              EXISTING=$(jq -c '.records' "data/${OUTPUT}")
+              MERGED=$(jq -c -n --argjson old "$EXISTING" --argjson new "$ALL_RECORDS" \
+                '($old + $new) | unique_by(.id)')
+              echo "{\"records\": $MERGED}" > "data/${OUTPUT}"
+            else
+              echo "{\"records\": $ALL_RECORDS}" > "data/${OUTPUT}"
+            fi
           }
 
           fetch_view "jobboard" "jobboard.json"
@@ -38,6 +92,8 @@ jobs:
           fetch_view "onsite-jobs-engineering-jobs" "onsite-jobs-engineering-jobs.json"
           fetch_view "hybrid-jobs" "hybrid-jobs.json"
           fetch_view "remote-jobs" "remote-jobs.json"
+
+          echo "{\"last_sync\": \"${RUN_START}\", \"mode\": \"${MODE}\"}" > "$STATE_FILE"
 
       - name: Commit and Push Changes to Repo
         run: |
