@@ -2,7 +2,7 @@ name: Airtable to GitHub Repo Sync
 
 on:
   schedule:
-    - cron: '0 * * * *' # Automatically runs every hour
+    - cron: '0 5 * * *' # Runs daily at 1:00 PM Philippine Time (UTC+8)
   workflow_dispatch: # Allows you to manually click "Run" anytime
 
 permissions:
