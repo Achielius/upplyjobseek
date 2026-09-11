@@ -16,14 +16,20 @@ jobs:
         env:
           AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_API_TOKEN }}
           BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
-          TABLE_NAME: "upply"
-          VIEW_NAME: "onsite-jobs-engineering-jobs"
         run: |
           mkdir -p data
-          # Fetches only your specific view and handles text spaces safely
-          curl -X GET "https://airtable.com{TABLE_NAME// /%20}?view=${VIEW_NAME// /%20}" \
-            -H "Authorization: Bearer $AIRTABLE_TOKEN" > data/records.json
-
+          
+          # We explicitly define and clean variables using native shell assignments 
+          TABLE="upply"
+          VIEW="onsite-jobs-engineering-jobs"
+          
+          # Safely encode any spaces into HTML format
+          ENCODED_TABLE=$(echo "$TABLE" | sed 's/ /%20/g')
+          ENCODED_VIEW=$(echo "$VIEW" | sed 's/ /%20/g')
+          
+          # Run curl using clean, decoupled URL variables
+          curl -f -X GET "https://airtable.com{BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}" \
+            -H "Authorization: Bearer ${AIRTABLE_TOKEN}" > data/records.json
 
       - name: Commit and Push Changes to Repo
         run: |
