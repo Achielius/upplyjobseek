@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: write
-  
+
 jobs:
   sync-data:
     runs-on: ubuntu-latest
@@ -51,7 +51,7 @@ jobs:
 
             # Only request the fields actually used on the website
             FIELDS_PARAM="&fields%5B%5D=Job%20Title&fields%5B%5D=Company&fields%5B%5D=Compensation&fields%5B%5D=Location&fields%5B%5D=Type&fields%5B%5D=Policy&fields%5B%5D=Date%20Posted&fields%5B%5D=Link"
-  
+
             FORMULA_PARAM=""
             if [ "$MODE" = "incremental" ]; then
               FORMULA="IS_AFTER(CREATED_TIME(), '${LAST_SYNC}')"
@@ -60,7 +60,7 @@ jobs:
             fi
 
             while true; do
-              URL="https://api.airtable.com/v0/${CLEAN_BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}&pageSize=100${FORMULA_PARAM}"
+              URL="https://api.airtable.com/v0/${CLEAN_BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}&pageSize=100${FIELDS_PARAM}${FORMULA_PARAM}"
               if [ -n "$OFFSET" ]; then
                 URL="${URL}&offset=${OFFSET}"
               fi
@@ -84,11 +84,9 @@ jobs:
 
             # Combine all page files by reading from disk, never via shell args
             jq -sc '{records: (add)}' "${TMP_DIR}"/page_*.json > "data/${OUTPUT}.new"
-            jq -sc '{records: ((.[0].records + .[1].records) | unique_by(.id))}' \
-            "data/${OUTPUT}" "data/${OUTPUT}.new" > "data/${OUTPUT}.merged"
 
             if [ "$MODE" = "incremental" ] && [ -f "data/${OUTPUT}" ]; then
-              jq -s '{records: ((.[0].records + .[1].records) | unique_by(.id))}' \
+              jq -sc '{records: ((.[0].records + .[1].records) | unique_by(.id))}' \
                 "data/${OUTPUT}" "data/${OUTPUT}.new" > "data/${OUTPUT}.merged"
               mv "data/${OUTPUT}.merged" "data/${OUTPUT}"
               rm "data/${OUTPUT}.new"
