@@ -21,18 +21,23 @@ jobs:
           BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
         run: |
           mkdir -p data
-
           TABLE="upply"
-          VIEW="onsite-jobs-engineering-jobs"
-
           CLEAN_BASE_ID=$(echo -n "$BASE_ID" | tr -d '[:space:]')
           ENCODED_TABLE=$(echo "$TABLE" | sed 's/ /%20/g')
-          ENCODED_VIEW=$(echo "$VIEW" | sed 's/ /%20/g')
 
-          echo "DEBUG URL: https://api.airtable.com/v0/${CLEAN_BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}"
+          fetch_view() {
+            VIEW="$1"
+            OUTPUT="$2"
+            ENCODED_VIEW=$(echo "$VIEW" | sed 's/ /%20/g')
+            curl -g -f -X GET "https://api.airtable.com/v0/${CLEAN_BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}" \
+              -H "Authorization: Bearer ${AIRTABLE_TOKEN}" > "data/${OUTPUT}"
+          }
 
-          curl -g -f -X GET "https://api.airtable.com/v0/${CLEAN_BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}" \
-            -H "Authorization: Bearer ${AIRTABLE_TOKEN}" > data/records.json
+          fetch_view "jobboard" "jobboard.json"
+          fetch_view "onsite-jobs" "onsite.json"
+          fetch_view "onsite-jobs-engineering-jobs" "onsite-jobs-engineering-jobs.json"
+          fetch_view "hybrid-jobs" "hybrid-jobs.json"
+          fetch_view "remote-jobs" "remote-jobs.json"
 
       - name: Commit and Push Changes to Repo
         run: |
