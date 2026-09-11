@@ -5,6 +5,9 @@ on:
     - cron: '0 * * * *' # Automatically runs every hour
   workflow_dispatch: # Allows you to manually click "Run" anytime
 
+permissions:
+  contents: write
+  
 jobs:
   sync-data:
     runs-on: ubuntu-latest
