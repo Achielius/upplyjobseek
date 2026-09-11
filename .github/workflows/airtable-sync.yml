@@ -16,23 +16,20 @@ jobs:
         env:
           AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_API_TOKEN }}
           BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
-        
         run: |
           mkdir -p data
 
           TABLE="upply"
-          VIEW="remote-jobs"
+          VIEW="onsite-jobs-engineering-jobs"
 
-          # Strip any accidental whitespace/newlines from secrets
           CLEAN_BASE_ID=$(echo -n "$BASE_ID" | tr -d '[:space:]')
-
           ENCODED_TABLE=$(echo "$TABLE" | sed 's/ /%20/g')
           ENCODED_VIEW=$(echo "$VIEW" | sed 's/ /%20/g')
 
           echo "DEBUG URL: https://api.airtable.com/v0/${CLEAN_BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}"
 
           curl -g -f -X GET "https://api.airtable.com/v0/${CLEAN_BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}" \
-          -H "Authorization: Bearer ${AIRTABLE_TOKEN}" > data/records.json
+            -H "Authorization: Bearer ${AIRTABLE_TOKEN}" > data/records.json
 
       - name: Commit and Push Changes to Repo
         run: |
