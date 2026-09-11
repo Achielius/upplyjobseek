@@ -32,7 +32,7 @@ jobs:
           echo "DEBUG URL: https://api.airtable.com/v0/${BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}"
           
           # Run curl using clean, decoupled URL variables
-          curl -g -f -X GET "https://api.airtable.com/v0/${BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}" \
+          curl -g -f -X GET "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${ENCODED_TABLE}?view=${ENCODED_VIEW}" \
           -H "Authorization: Bearer ${AIRTABLE_TOKEN}" > data/records.json
 
       - name: Commit and Push Changes to Repo
