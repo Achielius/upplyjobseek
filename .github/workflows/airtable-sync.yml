@@ -46,7 +46,8 @@ jobs:
             OUTPUT="$2"
             ENCODED_VIEW=$(echo "$VIEW" | sed 's/ /%20/g')
             OFFSET=""
-            ALL_RECORDS="[]"
+            TMP_DIR=$(mktemp -d)
+            PAGE_NUM=0
 
             FORMULA_PARAM=""
             if [ "$MODE" = "incremental" ]; then
@@ -64,27 +65,33 @@ jobs:
               RESPONSE=$(curl -g -s -f -X GET "$URL" -H "Authorization: Bearer ${AIRTABLE_TOKEN}")
               if [ $? -ne 0 ]; then
                 echo "Failed fetching $VIEW at offset $OFFSET"
+                rm -rf "$TMP_DIR"
                 exit 1
               fi
 
-              PAGE_RECORDS=$(echo "$RESPONSE" | jq '.records')
-              ALL_RECORDS=$(jq -c -n --argjson a "$ALL_RECORDS" --argjson b "$PAGE_RECORDS" '$a + $b')
-              OFFSET=$(echo "$RESPONSE" | jq -r '.offset // empty')
+              echo "$RESPONSE" | jq -c '.records' > "${TMP_DIR}/page_${PAGE_NUM}.json"
+              PAGE_NUM=$((PAGE_NUM + 1))
 
+              OFFSET=$(echo "$RESPONSE" | jq -r '.offset // empty')
               if [ -z "$OFFSET" ]; then
                 break
               fi
               sleep 0.25
             done
 
+            # Combine all page files by reading from disk, never via shell args
+            jq -s '{records: (add)}' "${TMP_DIR}"/page_*.json > "data/${OUTPUT}.new"
+
             if [ "$MODE" = "incremental" ] && [ -f "data/${OUTPUT}" ]; then
-              EXISTING=$(jq -c '.records' "data/${OUTPUT}")
-              MERGED=$(jq -c -n --argjson old "$EXISTING" --argjson new "$ALL_RECORDS" \
-                '($old + $new) | unique_by(.id)')
-              echo "{\"records\": $MERGED}" > "data/${OUTPUT}"
+              jq -s '{records: ((.[0].records + .[1].records) | unique_by(.id))}' \
+                "data/${OUTPUT}" "data/${OUTPUT}.new" > "data/${OUTPUT}.merged"
+              mv "data/${OUTPUT}.merged" "data/${OUTPUT}"
+              rm "data/${OUTPUT}.new"
             else
-              echo "{\"records\": $ALL_RECORDS}" > "data/${OUTPUT}"
+              mv "data/${OUTPUT}.new" "data/${OUTPUT}"
             fi
+
+            rm -rf "$TMP_DIR"
           }
 
           fetch_view "jobboard" "jobboard.json"
